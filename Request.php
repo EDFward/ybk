@@ -45,25 +45,57 @@ function calculate_distance(
 }
 
 // Maximum distance allowed from the restaurant to current position.
-$ALLOED_DISTANCE = 200.0;
+$ALLOWED_DISTANCE = 200.0;
 
 function get_nearest_restaurants(float $lat, float $lon): void {
-  $bookmarks = json_decode(file_get_contents("data/bookmarks.json"), true);
+  // Get previously notified restaurants.
+  $previousFilePath = 'data/previous.json';
+  if (file_exists($previousFilePath)) {
+    $previous =
+      new Vector(json_decode(file_get_contents($previousFilePath), true));
+  } else {
+    $previous = new Vector(null);
+  }
+  // Filter notifications within 10 mins.
+  $now = time();
+  $previous =
+    $previous->filter($n ==> round(abs($n['time'] - $now) / 60, 1) <= 10.0);
+  // Get restaurant IDs appeared before.
+  $appearedRestaurants = Set {};
+  foreach ($previous as $n) {
+    foreach ($n['ids'] as $id) {
+      $appearedRestaurants->add($id);
+    }
+  }
+
   $nearest = [];
 
-  foreach ($bookmarks as $bookmark) {
-    $dist = calculate_distance(
-      $bookmark['latitude'],
-      $bookmark['longitude'],
-      $lat,
-      $lon,
-    );
-    if ($dist < $GLOBALS['ALLOED_DISTANCE']) {
-      array_push($nearest, Pair {$bookmark, intval($dist)});
+  $bookmarks = json_decode(file_get_contents('data/bookmarks.json'), true);
+
+  foreach ($bookmarks as $b) {
+    if ($appearedRestaurants->contains($b['id'])) {
+      // Ignore already notified ones.
+      continue;
+    }
+
+    $dist = calculate_distance($b['latitude'], $b['longitude'], $lat, $lon);
+    if ($dist < $GLOBALS['ALLOWED_DISTANCE']) {
+      array_push($nearest, Pair {$b, intval($dist)});
     }
   }
 
   send_to_slack($nearest);
+
+  // Save this time's restaurant notification into `previous.json`.
+  if (count($nearest) > 0) {
+    $previous->add(
+      array(
+        'time' => $now,
+        'ids' => array_map($ele ==> $ele[0]['id'], $nearest),
+      ),
+    );
+    file_put_contents($previousFilePath, json_encode($previous));
+  }
 }
 
 function send_to_slack(array $nearest): void {
