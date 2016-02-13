@@ -2,15 +2,8 @@
 
 // A utility script to fetch bookmarked restaurants and their coordinates.
 
-require_once ('lib/OAuth.php');
-
-// Setup Yelp API info.
-$CONSUMER_KEY = $_ENV['CONSUMER_KEY'];
-$CONSUMER_SECRET = $_ENV['CONSUMER_SECRET'];
-$TOKEN = $_ENV['TOKEN'];
-$TOKEN_SECRET = $_ENV['TOKEN_SECRET'];
-$API_HOST = 'api.yelp.com';
-$BUSINESS_PATH = '/v2/business/';
+// Import `config()` and `get_business()`.
+require_once ('Restaurant.php');
 
 function fetch_restaurants(string $userID = 'XzkPRDkpb5WH1KuNDkYGuA'): Set {
   $bookmarkHTML = file_get_contents(
@@ -35,28 +28,11 @@ function fetch_restaurants(string $userID = 'XzkPRDkpb5WH1KuNDkYGuA'): Set {
   return $restaurantNames;
 }
 
-async function get_business(string $businessID): Awaitable<mixed> {
-  $businessPath = $GLOBALS['BUSINESS_PATH'].$businessID;
-  $rawURL = "https://".$GLOBALS['API_HOST'].$businessPath;
-  $token = new OAuthToken($GLOBALS['TOKEN'], $GLOBALS['TOKEN_SECRET']);
-  $consumer =
-    new OAuthConsumer($GLOBALS['CONSUMER_KEY'], $GLOBALS['CONSUMER_SECRET']);
+// Setup API-related configurations.
+config();
 
-  $signatureMethod = new OAuthSignatureMethod_HMAC_SHA1();
-
-  $oauthrequest =
-    OAuthRequest::from_consumer_and_token($consumer, $token, 'GET', $rawURL);
-  $oauthrequest->sign_request($signatureMethod, $consumer, $token);
-  $signedURL = $oauthrequest->to_url();
-
-  $data = await \HH\Asio\curl_exec($signedURL);
-  // Could return null if curl returned empty string.
-  return json_decode($data, true);
-}
-
-// Output array: a list of JSON objects containing restaurant ID and
-// corresponding coordinates.
-$coordinates = [];
+// Output array: a list of JSON objects containing restaurant information.
+$bookmarks = [];
 $restaurants = fetch_restaurants();
 
 // Fetch business info concurrently.
@@ -69,9 +45,17 @@ foreach ($infoList as $businessInfo) {
     continue;
   }
 
-  $c = $businessInfo['location']['coordinate'];
-  $c['name'] = $businessInfo['id'];
-  array_push($coordinates, $c);
+  // Only read necessary information.
+  $bookmark = $businessInfo['location']['coordinate'];
+  $bookmark['id'] = $businessInfo['id'];
+  $bookmark['name'] = $businessInfo['name'];
+  $bookmark['image_url'] = $businessInfo['image_url'];
+  $bookmark['url'] = $businessInfo['url'];
+  $bookmark['rating'] = $businessInfo['rating'];
+  $bookmark['categories'] =
+    array_map($p ==> $p[0], $businessInfo['categories']);
+
+  array_push($bookmarks, $bookmark);
 }
 
-file_put_contents('data/coordinates.json', json_encode($coordinates));
+file_put_contents('data/bookmarks.json', json_encode($bookmarks));
