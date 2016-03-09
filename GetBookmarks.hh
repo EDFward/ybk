@@ -6,23 +6,34 @@
 require_once ('Restaurant.php');
 
 function fetch_restaurants(string $userID = 'XzkPRDkpb5WH1KuNDkYGuA'): Set {
-  $bookmarkHTML = file_get_contents(
-    "http://www.yelp.com/user_details_bookmarks?userid=".$userID,
-  );
-  $dom = new DOMDocument();
-  libxml_use_internal_errors(true);
-  $dom->loadHTML($bookmarkHTML);
-  $xpath = new DOMXPath($dom);
-  $anchors = $xpath->query(
-    "//div[@class='arrange']//a[starts-with(@href, '/biz')]/@href",
-  );
   $restaurantNames = Set {};
 
-  foreach ($anchors as $a) {
-    if (isset($a->value)) {
-      // Trim the prefix '/biz/'.
-      $name = substr($a->value, 5);
-      $restaurantNames->add($name);
+  // Loop ended when no more restaurants can be fetched.
+  while (true) {
+    $cnt = $restaurantNames->count();
+    $bookmarkHTML = file_get_contents(
+      "http://www.yelp.com/user_details_bookmarks?userid={$userID}&start={$cnt}",
+    );
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $dom->loadHTML($bookmarkHTML);
+    $xpath = new DOMXPath($dom);
+    $anchors = $xpath->query(
+      "//div[@class='arrange']//a[starts-with(@href, '/biz')]/@href",
+    );
+
+    $updated = false;
+    foreach ($anchors as $a) {
+      if (isset($a->value)) {
+        // Trim the prefix '/biz/'.
+        $name = substr($a->value, 5);
+        $restaurantNames->add($name);
+        $updated = true;
+      }
+    }
+    // Exit if no new restaurant added.
+    if (!$updated) {
+      break;
     }
   }
   return $restaurantNames;
@@ -45,13 +56,13 @@ $BOOKMARK_FILE_PATH = 'data/bookmarks.json';
 function compare_and_notify_slack(array $newBookmarks): bool {
   $oldBookmarks =
     json_decode(file_get_contents($GLOBALS['BOOKMARK_FILE_PATH']), true);
-  $oldSize = count($oldBookmarks);
-  $newSize = count($newBookmarks);
+  $oldCount = count($oldBookmarks);
+  $newCount = count($newBookmarks);
 
-  if (abs($oldSize - $newSize) / $oldSize > 0.5) {
+  if (abs($oldCount - $newCount) / $oldCount > 0.5) {
     // Size changed too much, regard fetched results as failures.
-    $failureReport = "Bookmark size changed too much. Stopped.\n".
-                     "current: {$oldSize}, fetched: {$newSize}";
+    $failureReport = "Bookmark count changed too much. Stopped.\n".
+                     "current: {$oldCount}, fetched: {$newCount}";
     send_text_to_slack($failureReport);
     return false;
   }
