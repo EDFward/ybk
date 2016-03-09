@@ -84,7 +84,7 @@ function get_nearest_restaurants(float $lat, float $lon): void {
     }
   }
 
-  send_to_slack($nearest);
+  send_restaurant_to_slack($nearest);
 
   // Save this time's restaurant notification into `previous.json`.
   if (count($nearest) > 0) {
@@ -98,7 +98,7 @@ function get_nearest_restaurants(float $lat, float $lon): void {
   }
 }
 
-function send_to_slack(array $nearest): void {
+function send_restaurant_to_slack(array $nearest): void {
   if (count($nearest) == 0) {
     return;
   }
@@ -128,12 +128,9 @@ function send_to_slack(array $nearest): void {
   );
 
   $payload = array('attachments' => $attachments);
-
   $ch = curl_init();
-
   curl_setopt($ch, CURLOPT_URL, $GLOBALS['SLACK_URL']);
   curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-
   curl_exec($ch);
 }
 

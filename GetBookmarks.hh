@@ -28,11 +28,34 @@ function fetch_restaurants(string $userID = 'XzkPRDkpb5WH1KuNDkYGuA'): Set {
   return $restaurantNames;
 }
 
+function send_text_to_slack(string $text) {
+  $payload = array('text' => $text);
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $GLOBALS['SLACK_URL']);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+  curl_exec($ch);
+}
+
 $BOOKMARK_FILE_PATH = 'data/bookmarks.json';
 
-function compare_and_notify_slack(array $newBookmarks): void {
+/**
+  * Compare fetched bookmarks with existing ones. In case fetching fails,
+  * return false and notify slack the situation.
+  */
+function compare_and_notify_slack(array $newBookmarks): bool {
   $oldBookmarks =
     json_decode(file_get_contents($GLOBALS['BOOKMARK_FILE_PATH']), true);
+  $oldSize = count($oldBookmarks);
+  $newSize = count($newBookmarks);
+
+  if (abs($oldSize - $newSize) / $oldSize > 0.5) {
+    // Size changed too much, regard fetched results as failures.
+    $failureReport = "Bookmark size changed too much. Stopped.\n".
+                     "current: {$oldSize}, fetched: {$newSize}";
+    send_text_to_slack($failureReport);
+    return false;
+  }
+
   // Bookmark map keyed on restaurant IDs.
   $oldBookmarkMap = Map {};
   $newBookmarkMap = Map {};
@@ -65,15 +88,13 @@ function compare_and_notify_slack(array $newBookmarks): void {
     $report .= "\n".$info;
   }
 
-  $payload = array('text' => $report);
-
-  $ch = curl_init();
-
-  curl_setopt($ch, CURLOPT_URL, $GLOBALS['SLACK_URL']);
-  curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-
-  curl_exec($ch);
+  send_text_to_slack($report);
+  return true;
 }
+
+/****
+ **** Execution entry point - main.
+ ****/
 
 // Setup API-related configurations.
 config();
@@ -105,6 +126,8 @@ foreach ($infoList as $businessInfo) {
 }
 
 // First compare with old bookmarks.
-compare_and_notify_slack($bookmarks);
-// Then write the new bookmarks to disk.
-file_put_contents($BOOKMARK_FILE_PATH, json_encode($bookmarks));
+$fetchOk = compare_and_notify_slack($bookmarks);
+// Then write the new bookmarks to disk if fetching is OK.
+if ($fetchOk) {
+  file_put_contents($BOOKMARK_FILE_PATH, json_encode($bookmarks));
+}
