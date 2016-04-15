@@ -134,8 +134,34 @@ function send_restaurant_to_slack(array $nearest): void {
   curl_exec($ch);
 }
 
+function echo_bookmarks(): void {
+  header('Content-type: application/json');
+  echo file_get_contents('data/bookmarks.json');
+}
+
+function echo_notes(): void {
+  header('Content-type: application/json');
+  echo file_get_contents('data/notes.json');
+}
+
+function edit_notes($bookmarkId, $note): void {
+  if (!isset($bookmarkId) || !isset($note)) {
+    http_response_code(400);
+    return;
+  }
+  $notePath = 'data/notes.json';
+  // ...THIS IS A DATABASE!!!! I'M A GENIUS!!!!
+  $notes = json_decode(file_get_contents($notePath), true);
+  $notes[$bookmarkId] = $note;
+  file_put_contents($notePath, json_encode($notes));
+}
+
 // Setup API-related configurations.
 config();
+
+// Allow cross-origin requests.
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST');
 
 if (isset($_GET['lat']) &&
     preg_match('/^-?\d+\.\d+$/', $_GET['lat']) &&
@@ -143,6 +169,19 @@ if (isset($_GET['lat']) &&
     preg_match('/^-?\d+\.\d+$/', $_GET['lon'])) {
   list($lat, $lon) = array(floatval($_GET['lat']), floatval($_GET['lon']));
   get_nearest_restaurants($lat, $lon);
+} else if (isset($_GET['json'])) {
+  // Return bookmarks (JSON array) or notes (JSON object as a dictionary).
+  $neededResource = $_GET['json'];
+  switch ($neededResource) {
+    case 'bookmarks':
+      echo_bookmarks();
+      break;
+    case 'notes':
+      echo_notes();
+      break;
+  }
+} else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  edit_notes($_POST['id'], $_POST['note']);
 } else {
   echo 'Request not recognized';
 }
