@@ -181,7 +181,12 @@ if (isset($_GET['lat']) &&
       break;
   }
 } else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  edit_notes($_POST['id'], $_POST['note']);
+  if (isset($_COOKIE['ybkAuthCode']) &&
+      $_COOKIE['ybkAuthCode'] === $AUTH_COOKIE) {
+    edit_notes($_POST['id'], $_POST['note']);
+  } else {
+    http_response_code(400);
+  }
 } else {
   echo 'Request not recognized';
 }

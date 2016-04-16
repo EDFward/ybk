@@ -11,6 +11,7 @@ function config(): void {
   $GLOBALS['CONSUMER_KEY'] = $config['consumerKey'];
   $GLOBALS['CONSUMER_SECRET'] = $config['consumerSecret'];
   $GLOBALS['SLACK_URL'] = $config['slackUrl'];
+  $GLOBALS['AUTH_COOKIE'] = $config['authCookie'];
 }
 
 async function get_business(string $businessID): Awaitable<mixed> {
