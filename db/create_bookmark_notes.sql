@@ -13,6 +13,7 @@ CREATE TABLE `ybk_notes` (
   `review` text,
   `mark` varchar(15) DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `user_bookmark_id` (`user`, `bookmark_id`),
   KEY `user` (`user`),
   KEY `bookmark_id` (`bookmark_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;

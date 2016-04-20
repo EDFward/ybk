@@ -2,6 +2,8 @@
 
 // Import `config()`.
 require_once ('Restaurant.php');
+// Import DB operations for bookmark notes.
+require_once ('Notes.php');
 
 // Following code snippet is copied from
 // http://stackoverflow.com/questions/10053358/measuring-the-distance-between-two-coordinates-in-php
@@ -139,21 +141,23 @@ function echo_bookmarks(): void {
   echo file_get_contents('data/bookmarks.json');
 }
 
-function echo_notes(): void {
-  header('Content-type: application/json');
-  echo file_get_contents('data/notes.json');
+function prepare_mysql() {
+  $conn = mysqli_connect(
+    'localhost', 'edfward', $GLOBALS['MYSQL_PASSWORD'], 'ybk');
+  if (!$conn) {
+    http_response_code(400);
+    die('Could not connect: ' . mysqli_connect_error());
+  }
+  return $conn;
 }
 
-function edit_notes($bookmarkId, $note): void {
-  if (!isset($bookmarkId) || !isset($note)) {
-    http_response_code(400);
-    return;
-  }
-  $notePath = 'data/notes.json';
-  // ...THIS IS A DATABASE!!!! I'M A GENIUS!!!!
-  $notes = json_decode(file_get_contents($notePath), true);
-  $notes[$bookmarkId] = $note;
-  file_put_contents($notePath, json_encode($notes));
+function echo_notes(): void {
+  $conn = prepare_mysql();
+  // TODO: hard code my user name.
+  $notes = get_notes($conn, 'edfward');
+  mysqli_close($conn);
+  header('Content-type: application/json');
+  echo $notes;
 }
 
 // Setup API-related configurations.
@@ -162,6 +166,7 @@ config();
 // Allow cross-origin requests.
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST');
+
 
 if (isset($_GET['lat']) &&
     preg_match('/^-?\d+\.\d+$/', $_GET['lat']) &&
@@ -179,14 +184,33 @@ if (isset($_GET['lat']) &&
     case 'notes':
       echo_notes();
       break;
+    default:
+      http_response_code(400);
   }
 } else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  if (isset($_COOKIE['ybkAuthCode']) &&
-      $_COOKIE['ybkAuthCode'] === $AUTH_COOKIE) {
-    edit_notes($_POST['id'], $_POST['note']);
-  } else {
+  // Dead simple authorization.
+  if (!isset($_COOKIE['ybkAuthCode']) ||
+      $_COOKIE['ybkAuthCode'] !== $AUTH_COOKIE) {
+    http_response_code(400);
+    die('Need authorization');
+  }
+
+  if (!isset($_POST['id']) || !isset($_POST['type']) ||
+      !isset($_POST['content'])) {
+    http_response_code(400);
+    die('Wrong format');
+  }
+  // TODO: hard code my user name.
+  $user = 'edfward';
+  $conn = prepare_mysql();
+  $res = edit_notes(
+    $conn, $_POST['id'], $user, $_POST['type'], $_POST['content']);
+
+  if (!$res) {
+    // Update failed.
     http_response_code(400);
   }
 } else {
-  echo 'Request not recognized';
+  http_response_code(400);
+  die('Request not recognized');
 }
