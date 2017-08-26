@@ -35,6 +35,8 @@ function fetch_restaurants(string $userID = 'XzkPRDkpb5WH1KuNDkYGuA'): Set {
     if (!$updated) {
       break;
     }
+
+    sleep(5);  // Avoid blacklisting.
   }
   return $restaurantNames;
 }
